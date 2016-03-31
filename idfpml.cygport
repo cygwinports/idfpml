@@ -1,0 +1,104 @@
+NAME="idfpml"
+VERSION=2.0.1
+tar_v=20U1
+RELEASE=1
+CATEGORY="Libs"
+SUMMARY="Intel Decimal Floating-Point Math Library"
+DESCRIPTION="Software implementation of the IEEE 754-2008 Decimal Floating-Point
+Arithmetic specification, aimed at financial applications, especially in cases
+where legal requirements make it necessary to use decimal, and not binary
+floating-point arithmetic."
+HOMEPAGE="https://software.intel.com/en-us/articles/intel-decimal-floating-point-math-library"
+SRC_URI="http://www.netlib.org/misc/intel/IntelRDFPMathLib${tar_v}.tar.gz"
+SRC_DIR="IntelRDFPMathLib${tar_v}"
+
+PKG_NAMES="idfpml-devel"
+idfpml_devel_CONTENTS="
+  usr/include/${NAME}
+  usr/lib/libbid*.a
+  usr/share/doc/
+"
+
+src_compile() {
+  local i j k b flags
+
+  lndirs
+  cd ${B}/LIBRARY
+
+  for i in 0 1
+  do
+    flags=" CALL_BY_REF=${i}"
+
+    for j in 0 1
+    do
+      flags+=" GLOBAL_RND=${j}"
+
+      for k in 0 1
+      do
+        flags+=" GLOBAL_FLAGS=${k}"
+
+        for b in '' 1
+        do
+          flags+=" UNCHANGED_BINARY_FLAGS=${b:-0}"
+
+          inform "building configuration: $flags"
+
+          if [ -f libbid${i}${j}${k}${b:+b}.a ]
+          then
+            continue
+          fi
+
+          rm -f *.o libbid.a
+          cygmake _HOST_OS=Linux CC=${CC} _CFLAGS_OPT="${CFLAGS}" ${flags}
+
+          pushd ../TESTS
+          rm -f *.o
+          cygmake OS_TYPE=LINUX CC=${CC} COPT="${CFLAGS}" ${flags}
+          mv readtest.exe readtest${i}${j}${k}${b:+b}.exe
+          popd
+
+          pushd ../EXAMPLES
+          cp main.c_${i}${j}${k} main.c
+          cp decimal.h_${i}${j}${k} decimal.h
+          ${CC} ${CFLAGS} -o example${i}${j}${k}${b:+b} main.c ../LIBRARY/libbid.a
+          popd
+
+          mv libbid.a libbid${i}${j}${k}${b:+b}.a
+        done
+      done
+    done
+  done
+}
+
+src_test() {
+  local i j k b
+
+  cd ${B}
+  for i in 0 1
+  do
+    for j in 0 1
+    do
+      for k in 0 1
+      do
+        for b in '' b
+        do
+          pushd TESTS
+          ./readtest${i}${j}${k}${b}.exe < readtest.in
+          popd
+          pushd EXAMPLES
+          ./example${i}${j}${k}${b}.exe || true
+          popd
+        done
+      done
+    done
+  done
+}
+
+src_install() {
+  includeinto ${NAME}
+  doinclude ${S}/LIBRARY/src/*.h
+  dolib ${B}/LIBRARY/libbid[01][01][01]{,b}.a
+}
+
+
+DOCS="README eula.txt"
